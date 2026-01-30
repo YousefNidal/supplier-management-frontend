@@ -6,6 +6,9 @@
           <el-tag :type="getStatusType(order.status)" size="small" round>
             {{ getStatusText(order.status) }}
           </el-tag>
+          <el-tag v-if="order.isSplit" type="warning" size="small" style="margin-left: 5px;">
+            Разделен
+          </el-tag>
         </div>
         <div v-if="!isGuest" class="order-actions">
           <el-dropdown trigger="click" @command="handleCommand">
@@ -17,6 +20,13 @@
                 <el-dropdown-item command="edit">
                   <el-icon><Edit /></el-icon>
                   Редактировать
+                </el-dropdown-item>
+                <el-dropdown-item 
+                  v-if="order.status !== 'completed' && !order.isSplit" 
+                  command="split"
+                >
+                  <el-icon><Share /></el-icon>
+                  Разделить пополам
                 </el-dropdown-item>
                 <el-dropdown-item 
                   v-if="order.status !== 'completed'" 
@@ -75,8 +85,18 @@
         <div class="info-item">
           <span class="label">Расчет:</span>
           <span class="value calculation">
-            {{ formatCurrency(order.cost) }} - 30% - {{ formatCurrency(order.premium) }}
+            <template v-if="order.isSplit">
+              {{ formatCurrency(order.cost) }} - {{ formatCurrency(order.premium) }}
+            </template>
+            <template v-else>
+              {{ formatCurrency(order.cost) }} - 30% - {{ formatCurrency(order.premium) }}
+            </template>
           </span>
+        </div>
+        
+        <div v-if="order.isSplit" class="info-item split-info">
+          <span class="label">Разделен с:</span>
+          <span class="value">{{ order.splitWith || 'Не указано' }}</span>
         </div>
         
         <div v-if="order.notes" class="info-item notes">
@@ -96,7 +116,7 @@
 <script setup>
 import { defineProps, defineEmits } from 'vue'
 import { ElMessage } from 'element-plus'
-import { More, Edit, Delete, CircleCheck, CircleClose, ZoomIn } from '@element-plus/icons-vue'
+import { More, Edit, Delete, CircleCheck, CircleClose, ZoomIn, Share } from '@element-plus/icons-vue'
 
 const props = defineProps({
   order: {
@@ -109,7 +129,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['edit', 'delete', 'status-change'])
+const emit = defineEmits(['edit', 'delete', 'status-change', 'split'])
 
 // Методы
 const formatCurrency = (value) => {
@@ -152,6 +172,9 @@ const handleCommand = (command) => {
   switch (command) {
     case 'edit':
       emit('edit', props.order)
+      break
+    case 'split':
+      emit('split', props.order)
       break
     case 'complete':
       emit('status-change', props.order, 'completed')
@@ -298,6 +321,22 @@ const viewImage = () => {
   font-weight: normal;
 }
 
+.info-item.split-info {
+  background-color: #fff7e6;
+  padding: 8px;
+  border-radius: 4px;
+  margin: 5px 0;
+}
+
+.info-item.split-info .label {
+  color: #e6a23c;
+}
+
+.info-item.split-info .value {
+  color: #e6a23c;
+  font-weight: bold;
+}
+
 .info-item.notes {
   flex-direction: column;
   align-items: flex-start;
@@ -341,6 +380,10 @@ const viewImage = () => {
 
 .order-card.status-cancelled {
   border-top: 3px solid #f56c6c;
+}
+
+.order-card.status-active.is-split {
+  border-left: 4px solid #e6a23c;
 }
 
 @media (max-width: 768px) {

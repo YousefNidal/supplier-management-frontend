@@ -9,15 +9,12 @@
     <!-- Кнопки действий (только для продавца) -->
     <div v-if="!isGuest" class="action-buttons">
       <el-button type="success" @click="showAddDialog = true">
-        <!-- <el-icon><Plus /></el-icon> -->
         Добавить поставщика
       </el-button>
       <el-button type="info" @click="loadSuppliers">
-        <!-- <el-icon><Refresh /></el-icon> -->
         Обновить список
       </el-button>
       <el-button type="warning" @click="exportToCSV">
-        <!-- <el-icon><Download /></el-icon> -->
         Экспорт в CSV
       </el-button>
     </div>
@@ -52,7 +49,7 @@
             clearable
           >
             <template #prefix>
-              <!-- <el-icon><Search /></el-icon> -->
+              <el-icon><Search /></el-icon>
             </template>
           </el-input>
         </div>
@@ -82,7 +79,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="Добавлен" width="180">
+        <el-table-column prop="createdAt" label="Добавлен" width="180" sortable>
           <template #default="scope">
             {{ formatDate(scope.row.createdAt) }}
           </template>
@@ -95,7 +92,6 @@
                 type="primary" 
                 @click="viewOrders(scope.row)"
               >
-                <!-- <el-icon><List /></el-icon> -->
                 Заказы
               </el-button>
               <el-button 
@@ -103,16 +99,15 @@
                 size="small" 
                 @click="editSupplier(scope.row)"
               >
-              Edit
-                <!-- <el-icon><Edit /></el-icon> -->
+                Edit
               </el-button>
               <el-button 
                 v-if="!isGuest"
                 size="small" 
                 type="danger" 
                 @click="deleteSupplier(scope.row)"
-              >X
-                <!-- <el-icon><Delete /></el-icon> -->
+              >
+                X
               </el-button>
               <el-button 
                 v-if="isGuest"
@@ -120,7 +115,7 @@
                 type="info"
                 disabled
               >
-                <!-- <el-icon><Lock /></el-icon> -->
+                Просмотр
               </el-button>
             </el-button-group>
           </template>
@@ -181,7 +176,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-// import { Plus, Refresh, Download, Search, Edit, Delete, List, Lock } from '../utils/icons'
+import { Search } from '@element-plus/icons-vue'
 import AddSupplierDialog from '../components/AddSupplierDialog.vue'
 import api from '../utils/api'
 
@@ -213,7 +208,8 @@ const filteredSuppliers = computed(() => {
     const query = searchQuery.value.toLowerCase()
     filtered = filtered.filter(supplier =>
       supplier.name.toLowerCase().includes(query) ||
-      supplier.gameNickname.toLowerCase().includes(query)
+      supplier.gameNickname.toLowerCase().includes(query) ||
+      (supplier.createdAt && supplier.createdAt.toLowerCase().includes(query))
     )
   }
   
@@ -237,6 +233,7 @@ const averageDebt = computed(() => {
 
 // Методы
 const formatCurrency = (value) => {
+  if (value === undefined || value === null) return '0 ₽'
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: 'RUB',
@@ -245,13 +242,19 @@ const formatCurrency = (value) => {
 }
 
 const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  if (!dateString) return 'Нет даты'
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch (error) {
+    return dateString
+  }
 }
 
 const loadSuppliers = async () => {
@@ -259,6 +262,7 @@ const loadSuppliers = async () => {
   try {
     const response = await api.get('/suppliers')
     suppliers.value = response.data
+    console.log('Загружено поставщиков:', suppliers.value.length)
   } catch (error) {
     console.error('Error loading suppliers:', error)
     ElMessage.error('Ошибка загрузки поставщиков')
@@ -300,7 +304,7 @@ const deleteSupplier = async (supplier) => {
     )
     
     await api.delete(`/suppliers/${supplier.id}`)
-    suppliers.value = suppliers.value.filter(s => s.id !== supplier.id)
+    await loadSuppliers()
     ElMessage.success('Поставщик успешно удален')
   } catch (error) {
     if (error !== 'cancel') {
@@ -329,12 +333,12 @@ const exportToCSV = () => {
     s.gameNickname,
     s.debt,
     s.ordersCount,
-    new Date(s.createdAt).toLocaleDateString('ru-RU')
+    formatDate(s.createdAt)
   ])
   
   const csvContent = [
     headers.join(','),
-    ...data.map(row => row.join(','))
+    ...data.map(row => row.map(cell => `"${cell}"`).join(','))
   ].join('\n')
   
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })

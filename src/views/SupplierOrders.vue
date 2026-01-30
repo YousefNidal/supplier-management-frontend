@@ -24,11 +24,9 @@
           type="success" 
           @click="showAddOrderDialog = true"
         >
-          <!-- <el-icon><Plus /></el-icon> -->
           Добавить заказ
         </el-button>
         <el-button type="info" @click="loadOrders">
-          <!-- <el-icon><Refresh /></el-icon> -->
           Обновить
         </el-button>
       </div>
@@ -86,7 +84,7 @@
             clearable
           >
             <template #prefix>
-              <!-- <el-icon><Search /></el-icon> -->
+              <el-icon><Search /></el-icon>
             </template>
           </el-input>
         </el-col>
@@ -149,6 +147,7 @@
               @edit="editOrder"
               @delete="deleteOrder"
               @status-change="changeOrderStatus"
+              @split="splitOrder"
             />
           </el-col>
         </el-row>
@@ -188,12 +187,12 @@
               <img :src="orderForm.imageUrl" alt="Preview" class="preview-image" />
               <div class="image-overlay">
                 <el-button type="danger" size="small" @click="orderForm.imageUrl = ''">
-                  <!-- <el-icon><Delete /></el-icon> -->
+                  <el-icon><Delete /></el-icon>
                 </el-button>
               </div>
             </div>
             <div v-else class="image-upload-placeholder">
-              <!-- <el-icon size="50"><Picture /></el-icon> -->
+              <el-icon size="50"><Picture /></el-icon>
               <p>Нажмите для загрузки изображения</p>
             </div>
             <el-input
@@ -203,7 +202,7 @@
             >
               <template #append>
                 <el-button @click="showImageUrlInput = !showImageUrlInput">
-                  <!-- <el-icon><Link /></el-icon> -->
+                  <el-icon><Link /></el-icon>
                 </el-button>
               </template>
             </el-input>
@@ -229,6 +228,7 @@
                 :max="1000000"
                 style="width: 100%"
                 placeholder="Введите стоимость"
+                @change="recalculateDebt"
               />
             </el-form-item>
           </el-col>
@@ -242,6 +242,7 @@
                 :max="50000"
                 style="width: 100%"
                 placeholder="Дополнительная плата"
+                @change="recalculateDebt"
               />
             </el-form-item>
           </el-col>
@@ -253,7 +254,7 @@
               <span>Стоимость заказа:</span>
               <span class="calculation-value">{{ formatCurrency(orderForm.cost) }}</span>
             </div>
-            <div class="calculation-row">
+            <div v-if="!orderForm.isSplit" class="calculation-row">
               <span>Вычитаем 30% (ваша комиссия):</span>
               <span class="calculation-value minus">-{{ formatCurrency(orderForm.cost * 0.3) }}</span>
             </div>
@@ -264,14 +265,50 @@
             <div class="calculation-row total">
               <span>Задолженность поставщику:</span>
               <span class="calculation-value total-value">
-                {{ formatCurrency(orderForm.cost - (orderForm.cost * 0.3) - orderForm.premium) }}
+                {{ formatCurrency(calculateDebt()) }}
               </span>
             </div>
             <div class="calculation-explanation">
-              <small>Формула: <strong>Стоимость - 30% - Премиум = Задолженность</strong></small>
+              <small v-if="!orderForm.isSplit">
+                Формула: <strong>Стоимость - 30% - Премиум = Задолженность</strong>
+              </small>
+              <small v-else>
+                <strong>Формула для разделенного заказа:</strong>
+                <br><strong>(Стоимость / 2) - (Премиум / 2) = Задолженность</strong>
+                <br><em>При создании разделенного заказа введите полную стоимость и премиум.</em>
+                <br><em>Система автоматически разделит их пополам при сохранении.</em>
+              </small>
               <br>
               <small>Это сумма, которую вы должны заплатить поставщику</small>
             </div>
+          </div>
+        </el-form-item>
+
+        <el-form-item label="Разделить заказ пополам">
+          <el-switch
+            v-model="orderForm.isSplit"
+            active-text="Да"
+            inactive-text="Нет"
+            @change="handleSplitToggle"
+          />
+        </el-form-item>
+
+        <el-form-item v-if="orderForm.isSplit" label="Разделить с кем?" prop="splitWith">
+          <el-input
+            v-model="orderForm.splitWith"
+            placeholder="Введите ник продавца для разделения"
+            clearable
+          />
+          <div class="split-explanation">
+            <small>При разделении заказа пополам:</small>
+            <ul>
+              <li>Полная стоимость: {{ formatCurrency(orderForm.cost) }}</li>
+              <li>Полный премиум: {{ formatCurrency(orderForm.premium) }}</li>
+              <li>После разделения (на каждого):</li>
+              <li>• Стоимость: {{ formatCurrency(orderForm.cost / 2) }}</li>
+              <li>• Премиум: {{ formatCurrency(orderForm.premium / 2) }}</li>
+              <li>• Задолженность: {{ formatCurrency((orderForm.cost / 2) - (orderForm.premium / 2)) }}</li>
+            </ul>
           </div>
         </el-form-item>
 
@@ -308,6 +345,79 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- Диалог разделения заказа пополам -->
+    <el-dialog
+      v-model="showSplitDialog"
+      title="Разделить заказ пополам"
+      width="500px"
+    >
+      <el-form :model="splitForm" label-width="150px">
+        <el-form-item label="Стоимость заказа">
+          <el-input :value="formatCurrency(currentOrder?.cost)" readonly />
+        </el-form-item>
+        
+        <el-form-item label="Премиум">
+          <el-input :value="formatCurrency(currentOrder?.premium)" readonly />
+        </el-form-item>
+        
+        <el-form-item label="После разделения">
+          <div class="split-calculation">
+            <div class="split-row">
+              <span>Полная стоимость:</span>
+              <span class="split-value">{{ formatCurrency(currentOrder?.cost) }}</span>
+            </div>
+            <div class="split-row">
+              <span>Полный премиум:</span>
+              <span class="split-value">{{ formatCurrency(currentOrder?.premium) }}</span>
+            </div>
+            <div class="split-row">
+              <span>Стоимость (половина):</span>
+              <span class="split-value">{{ formatCurrency(currentOrder?.cost / 2) }}</span>
+            </div>
+            <div class="split-row">
+              <span>Премиум (половина):</span>
+              <span class="split-value">{{ formatCurrency(currentOrder?.premium / 2) }}</span>
+            </div>
+            <div class="split-row total">
+              <span>Задолженность (половина):</span>
+              <span class="split-value total">
+                <!-- ИСПРАВЛЕННЫЙ РАСЧЕТ: (стоимость/2) - (премиум/2) -->
+                {{ formatCurrency((currentOrder?.cost / 2) - (currentOrder?.premium / 2)) }}
+              </span>
+            </div>
+            <div class="calculation-example" v-if="currentOrder">
+              <small>Пример расчета:</small>
+              <small>Формула: <strong>(Стоимость / 2) - (Премиум / 2)</strong></small>
+              <small>{{ formatCurrency(currentOrder.cost) }} / 2 - {{ formatCurrency(currentOrder.premium) }} / 2 =</small>
+              <small>{{ formatCurrency(currentOrder.cost / 2) }} - {{ formatCurrency(currentOrder.premium / 2) }} =</small>
+              <small><strong>{{ formatCurrency((currentOrder.cost / 2) - (currentOrder.premium / 2)) }}</strong></small>
+            </div>
+          </div>
+        </el-form-item>
+        
+        <el-form-item label="Разделить с кем?" prop="splitWith" required>
+          <el-input
+            v-model="splitForm.splitWith"
+            placeholder="Введите ник продавца для разделения"
+            clearable
+          />
+        </el-form-item>
+      </el-form>
+      
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showSplitDialog = false">Отмена</el-button>
+          <el-button 
+            type="warning" 
+            @click="confirmSplit"
+            :loading="splitting"
+          >
+            Разделить пополам
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -316,7 +426,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
-// import { Plus, Refresh, Search, Delete, Picture, Link } from '../utils/icons'
+import { Search, Delete, Picture, Link } from '@element-plus/icons-vue'
 import OrderCard from '../components/OrderCard.vue'
 import api from '../utils/api'
 
@@ -350,9 +460,14 @@ const pageSize = ref(8)
 
 // Диалоги
 const showAddOrderDialog = ref(false)
+const showSplitDialog = ref(false)
 const isEditing = ref(false)
 const showImageUrlInput = ref(false)
 const submitting = ref(false)
+const splitting = ref(false)
+
+// Текущий заказ для операций
+const currentOrder = ref(null)
 
 // Формы
 const orderFormRef = ref(null)
@@ -362,7 +477,13 @@ const orderForm = reactive({
   cost: 1000,
   premium: 100,
   status: 'active',
-  notes: ''
+  notes: '',
+  isSplit: false,
+  splitWith: ''
+})
+
+const splitForm = reactive({
+  splitWith: ''
 })
 
 const orderRules = {
@@ -387,7 +508,8 @@ const filteredOrders = computed(() => {
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     filtered = filtered.filter(order => 
-      order.notes?.toLowerCase().includes(query)
+      order.notes?.toLowerCase().includes(query) ||
+      (order.createdAt && order.createdAt.toLowerCase().includes(query))
     )
   }
 
@@ -441,21 +563,46 @@ const stats = computed(() => {
 
 // Методы
 const formatCurrency = (value) => {
+  if (value === undefined || value === null) return '0 ₽'
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: 'RUB',
-    minimumFractionDigits: 2
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(value)
 }
 
 const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  if (!dateString) return 'Нет даты'
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch (error) {
+    return dateString
+  }
+}
+
+// ИСПРАВЛЕННЫЙ РАСЧЕТ ЗАДОЛЖЕННОСТИ
+const calculateDebt = () => {
+  if (orderForm.isSplit) {
+    // Для разделенных заказов: (стоимость/2) - (премиум/2)
+    // При создании пользователь вводит полную стоимость
+    return (orderForm.cost / 2) - (orderForm.premium / 2)
+  } else {
+    // Для обычных заказов: стоимость - 30% - премиум
+    return orderForm.cost - (orderForm.cost * 0.3) - orderForm.premium
+  }
+}
+
+const recalculateDebt = () => {
+  // Метод вызывается при изменении стоимости или премиума
+  // Обновляем расчет в реальном времени
 }
 
 const loadSupplier = async () => {
@@ -463,6 +610,7 @@ const loadSupplier = async () => {
     const supplierId = route.params.id
     const response = await api.get(`/suppliers/${supplierId}`)
     supplier.value = response.data
+    console.log('Загружен поставщик:', supplier.value)
   } catch (error) {
     console.error('Error loading supplier:', error)
     ElMessage.error('Ошибка загрузки информации о поставщике')
@@ -476,6 +624,10 @@ const loadOrders = async () => {
     const supplierId = route.params.id
     const response = await api.get(`/suppliers/${supplierId}/orders`)
     orders.value = response.data
+    console.log('Загружено заказов:', orders.value.length)
+    
+    // Перезагружаем информацию о поставщике для обновления счетчиков
+    await loadSupplier()
   } catch (error) {
     console.error('Error loading orders:', error)
     ElMessage.error('Ошибка загрузки заказов')
@@ -495,15 +647,101 @@ const editOrder = (order) => {
   }
   
   isEditing.value = true
+  
+  // Если заказ разделен, показываем полную стоимость (а не половину)
+  // для удобства редактирования
+  let displayCost = order.cost
+  let displayPremium = order.premium
+  
+  if (order.isSplit) {
+    // Разделенный заказ хранит половину стоимости, но для редактирования
+    // показываем полную стоимость (удваиваем)
+    displayCost = order.cost * 2
+    displayPremium = order.premium * 2
+  }
+  
   Object.assign(orderForm, {
     id: order.id,
     imageUrl: order.imageUrl,
-    cost: order.cost,
-    premium: order.premium,
+    cost: displayCost,
+    premium: displayPremium,
     status: order.status,
-    notes: order.notes || ''
+    notes: order.notes || '',
+    isSplit: order.isSplit || false,
+    splitWith: order.splitWith || ''
   })
   showAddOrderDialog.value = true
+}
+
+const splitOrder = (order) => {
+  if (isGuest.value) {
+    ElMessage.warning('Разделение доступно только авторизованным продавцам')
+    return
+  }
+  
+  if (order.isSplit) {
+    ElMessage.warning('Этот заказ уже разделен')
+    return
+  }
+  
+  if (order.status !== 'active') {
+    ElMessage.warning('Можно разделить только активные заказы')
+    return
+  }
+  
+  currentOrder.value = order
+  splitForm.splitWith = ''
+  showSplitDialog.value = true
+  
+  // Показываем пример расчета
+  console.log('Пример расчета для разделения:')
+  console.log(`Стоимость: ${order.cost}, Премиум: ${order.premium}`)
+  console.log(`Расчет: (${order.cost}/2) - (${order.premium}/2) = ${order.cost/2} - ${order.premium/2} = ${(order.cost/2) - (order.premium/2)}`)
+  
+  // Показываем информационное сообщение пользователю
+  ElMessage.info({
+    message: `Заказ будет разделен пополам:
+      Полная стоимость: ${formatCurrency(order.cost)}
+      Полный премиум: ${formatCurrency(order.premium)}
+      Задолженность за половину: ${formatCurrency((order.cost / 2) - (order.premium / 2))}`,
+    duration: 8000,
+    showClose: true
+  })
+}
+
+const confirmSplit = async () => {
+  if (!splitForm.splitWith.trim()) {
+    ElMessage.warning('Пожалуйста, укажите, с кем разделить заказ')
+    return
+  }
+  
+  splitting.value = true
+  try {
+    const response = await api.post(`/orders/${currentOrder.value.id}/split`, {
+      splitWith: splitForm.splitWith
+    })
+    
+    const halfCost = currentOrder.value.cost / 2
+    const halfPremium = currentOrder.value.premium / 2
+    const halfDebt = halfCost - halfPremium
+    
+    ElMessage.success({
+      message: `Заказ успешно разделен пополам!
+        Стоимость (половина): ${formatCurrency(halfCost)}
+        Премиум (половина): ${formatCurrency(halfPremium)}
+        Задолженность (половина): ${formatCurrency(halfDebt)}`,
+      duration: 6000,
+      showClose: true
+    })
+    
+    showSplitDialog.value = false
+    await loadOrders()
+  } catch (error) {
+    console.error('Error splitting order:', error)
+    ElMessage.error('Ошибка при разделении заказа')
+  } finally {
+    splitting.value = false
+  }
 }
 
 const deleteOrder = async (order) => {
@@ -524,8 +762,7 @@ const deleteOrder = async (order) => {
     )
     
     await api.delete(`/orders/${order.id}`)
-    orders.value = orders.value.filter(o => o.id !== order.id)
-    await loadSupplier() // Обновляем данные поставщика
+    await loadOrders() // Обновляем данные
     ElMessage.success('Заказ успешно удален')
   } catch (error) {
     if (error !== 'cancel') {
@@ -547,18 +784,26 @@ const changeOrderStatus = async (order, newStatus) => {
       status: newStatus
     })
     
-    // Обновляем локальные данные
-    const index = orders.value.findIndex(o => o.id === order.id)
-    if (index !== -1) {
-      orders.value[index].status = newStatus
-    }
-    
-    await loadSupplier() // Обновляем данные поставщика
+    await loadOrders() // Обновляем все данные
     ElMessage.success(`Статус заказа изменен на "${newStatus === 'active' ? 'Активный' : newStatus === 'completed' ? 'Завершенный' : 'Отмененный'}"`)
   } catch (error) {
     console.error('Error changing order status:', error)
     ElMessage.error('Ошибка изменения статуса заказа')
   }
+}
+
+const handleSplitToggle = (value) => {
+  if (!value) {
+    orderForm.splitWith = ''
+  } else {
+    // При включении разделения показываем предупреждение
+    ElMessage.info({
+      message: 'При создании разделенного заказа введите полную стоимость и премиум. Система автоматически разделит их пополам.',
+      duration: 5000,
+      showClose: true
+    })
+  }
+  recalculateDebt()
 }
 
 const resetDialog = () => {
@@ -569,6 +814,8 @@ const resetDialog = () => {
   orderForm.premium = 100
   orderForm.status = 'active'
   orderForm.notes = ''
+  orderForm.isSplit = false
+  orderForm.splitWith = ''
   
   if (orderFormRef.value) {
     orderFormRef.value.resetFields()
@@ -587,33 +834,66 @@ const submitOrderForm = async () => {
     await orderFormRef.value.validate()
     submitting.value = true
     
-    console.log('Submitting order form:', orderForm);
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Правильная подготовка данных
+    let costToSend = orderForm.cost
+    let premiumToSend = orderForm.premium
+    
+    if (orderForm.isSplit) {
+      // Для разделенных заказов:
+      // 1. Если это редактирование и заказ уже был разделен, 
+      //    то orderForm содержит полную стоимость
+      if (isEditing.value) {
+        // Проверяем, был ли оригинальный заказ разделенным
+        const originalOrder = orders.value.find(o => o.id === orderForm.id)
+        if (originalOrder && originalOrder.isSplit) {
+          // Заказ уже разделен, пользователь отредактировал полную стоимость
+          // Делим на 2 для сохранения
+          costToSend = orderForm.cost / 2
+          premiumToSend = orderForm.premium / 2
+        } else {
+          // Заказ не был разделен, пользователь хочет сделать его разделенным
+          // Делим на 2 для сохранения
+          costToSend = orderForm.cost / 2
+          premiumToSend = orderForm.premium / 2
+        }
+      } else {
+        // Для нового разделенного заказа: делим введенные значения на 2
+        costToSend = orderForm.cost / 2
+        premiumToSend = orderForm.premium / 2
+      }
+    }
     
     const orderData = {
       supplierId: supplier.value.id,
       imageUrl: orderForm.imageUrl,
-      cost: orderForm.cost,
-      premium: orderForm.premium,
+      cost: costToSend,
+      premium: premiumToSend,
       notes: orderForm.notes,
-      status: orderForm.status
+      status: orderForm.status,
+      isSplit: orderForm.isSplit,
+      splitWith: orderForm.splitWith
     }
     
-    console.log('Sending order data:', orderData);
+    console.log('Отправка данных заказа:', orderData)
+    console.log('Исходные данные:', {
+      isSplit: orderForm.isSplit,
+      originalCost: orderForm.cost,
+      originalPremium: orderForm.premium,
+      sendingCost: costToSend,
+      sendingPremium: premiumToSend,
+      expectedDebt: calculateDebt()
+    })
     
     if (isEditing.value) {
-      // Используем правильный endpoint для обновления
       await api.put(`/orders/${orderForm.id}`, orderData)
       ElMessage.success('Заказ успешно обновлен')
     } else {
-      // Используем правильный endpoint для создания
-      const response = await api.post('/orders', orderData)
-      console.log('Order created:', response.data)
+      await api.post('/orders', orderData)
       ElMessage.success('Заказ успешно добавлен')
     }
     
     showAddOrderDialog.value = false
     await loadOrders()
-    await loadSupplier()
   } catch (error) {
     console.error('Error in submitOrderForm:', error)
     
@@ -869,7 +1149,80 @@ onMounted(() => {
   border-top: 1px dashed #dcdfe6;
   font-size: 12px;
   color: #909399;
-  text-align: center;
+  text-align: left;
+}
+
+.calculation-explanation small {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.split-explanation {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #fff7e6;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #e6a23c;
+}
+
+.split-explanation ul {
+  margin: 5px 0 0 15px;
+  padding: 0;
+}
+
+.split-explanation li {
+  margin: 2px 0;
+}
+
+/* Диалог разделения */
+.split-calculation {
+  background: #f5f7fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+.split-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.split-row:last-child {
+  border-bottom: none;
+}
+
+.split-row.total {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 2px solid #e6a23c;
+}
+
+.split-value {
+  font-weight: 600;
+  color: #606266;
+}
+
+.split-value.total {
+  color: #e6a23c;
+  font-size: 16px;
+}
+
+.calculation-example {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #f0f9ff;
+  border-radius: 4px;
+  border-left: 4px solid #409eff;
+}
+
+.calculation-example small {
+  display: block;
+  color: #606266;
+  margin: 3px 0;
+  font-family: monospace;
 }
 
 .dialog-footer {
