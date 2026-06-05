@@ -198,14 +198,24 @@ const submitForm = async () => {
 
 <style scoped>
 .form-help {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 5px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  line-height: 1.4;
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
+}
+
+:deep(.el-form-item) {
+  margin-bottom: 24px;
+}
+
+:deep(.el-form-item__label) {
+  color: var(--text-secondary);
+  font-weight: 500;
 }
 </style>

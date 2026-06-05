@@ -366,36 +366,69 @@ onMounted(() => {
 
 <style scoped>
 .suppliers-page {
-  padding: 20px;
+  padding: 10px;
 }
 
 .page-header {
-  margin-bottom: 30px;
+  margin-bottom: 24px;
 }
 
 .page-header h1 {
-  margin: 0 0 10px 0;
-  color: #303133;
+  margin: 0 0 8px 0;
+  color: var(--text-primary);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
 .page-header p {
   margin: 0;
-  color: #909399;
+  color: var(--text-secondary);
+  font-size: 15px;
 }
 
 .action-buttons {
   display: flex;
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: 16px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
+.action-buttons .el-button {
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 600;
+  height: auto;
+  transition: all 0.2s;
+}
+
+.action-buttons .el-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 .guest-notice {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+}
+
+:deep(.el-alert) {
+  border-radius: 12px;
+  background-color: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
 .suppliers-table-card {
   margin-bottom: 30px;
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+}
+
+:deep(.el-card__header) {
+  border-bottom: 1px solid var(--border-color) !important;
+  padding: 16px 20px !important;
 }
 
 .table-header {
@@ -403,21 +436,54 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
+  color: var(--text-primary);
 }
 
 .debt-highlight {
-  color: #e6a23c;
+  color: var(--warning);
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+:deep(.el-table) {
+  background: transparent !important;
+  --el-table-border-color: var(--border-color);
+  --el-table-header-bg-color: rgba(15, 23, 42, 0.6);
+  --el-table-tr-bg-color: transparent;
+}
+
+:deep(.el-table th.el-table__cell) {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-secondary) !important;
   font-weight: 600;
 }
 
+:deep(.el-table tr) {
+  background-color: transparent !important;
+  transition: background-color 0.2s;
+}
+
+:deep(.el-table tr:hover > td.el-table__cell) {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+:deep(.el-table td.el-table__cell) {
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
 .pagination {
-  margin-top: 20px;
+  margin-top: 24px;
   display: flex;
   justify-content: center;
 }
 
 .stats-card {
-  margin-top: 20px;
+  margin-top: 24px;
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
 }
 
 .stats-grid {
@@ -428,32 +494,35 @@ onMounted(() => {
 
 .stat-item {
   text-align: center;
-  padding: 15px;
-  background-color: #f5f7fa;
-  border-radius: 8px;
+  padding: 20px;
+  background-color: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
   transition: transform 0.3s ease;
 }
 
 .stat-item:hover {
   transform: translateY(-5px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .stat-label {
   font-size: 14px;
-  color: #909399;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   font-weight: 500;
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 700;
-  color: #303133;
+  color: var(--text-primary);
+  font-feature-settings: "tnum";
 }
 
 .stat-value.debt {
-  color: #e6a23c;
+  color: var(--warning);
 }
 
 @media (max-width: 768px) {
@@ -464,7 +533,7 @@ onMounted(() => {
   }
   
   .table-header .el-input {
-    width: 100%;
+    width: 100% !important;
   }
   
   .action-buttons {
@@ -473,19 +542,20 @@ onMounted(() => {
   
   .action-buttons .el-button {
     width: 100%;
+    margin-left: 0 !important;
   }
   
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 12px;
   }
   
   .stat-item {
-    padding: 10px;
+    padding: 16px 12px;
   }
   
   .stat-value {
-    font-size: 20px;
+    font-size: 24px;
   }
 }
 
